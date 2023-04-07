@@ -4499,11 +4499,36 @@ if ((en_sql_server = "y") or (en_sql_express = "y")) then
 
     ' attempt to determine the edition of SQL
     db_edition = ""
+   ' SQL 2022
+    if (isnull(db_edition) or db_edition = "") then
+        oReg.GetStringValue HKEY_LOCAL_MACHINE,"SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL16.MSSQLSERVER\Setup","Edition", db_edition
+    end if
+    
+   ' SQL 2019
+    if (isnull(db_edition) or db_edition = "") then
+        oReg.GetStringValue HKEY_LOCAL_MACHINE,"SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL15.MSSQLSERVER\Setup","Edition", db_edition
+    end if
+ 
+    ' SQL 2017
+        oReg.GetStringValue HKEY_LOCAL_MACHINE,"SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL14.MSSQLSERVER\Setup","Edition", db_edition
+    if (isnull(db_edition) or db_edition = "") then
+    end if
+ 
+    ' SQL 2016
+    if (isnull(db_edition) or db_edition = "") then
+        oReg.GetStringValue HKEY_LOCAL_MACHINE,"SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL13.MSSQLSERVER\Setup","Edition", db_edition
+    end if
+   
     ' SQL 2014
     if (isnull(db_edition) or db_edition = "") then
         oReg.GetStringValue HKEY_LOCAL_MACHINE,"SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL12.MSSQLSERVER\Setup","Edition", db_edition
     end if
-    '
+ 
+    ' SQL 2012
+    if (isnull(db_edition) or db_edition = "") then
+        oReg.GetStringValue HKEY_LOCAL_MACHINE,"SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL11.MSSQLSERVER\Setup","Edition", db_edition
+    end if
+    
     ' SQL 2008 r2
     if (isnull(db_edition) or db_edition = "") then
         oReg.GetStringValue HKEY_LOCAL_MACHINE,"SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL10_50.MSSQLSERVER\Setup","Edition", db_edition
