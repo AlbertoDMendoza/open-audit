@@ -23,7 +23,7 @@
 
 ' @package Open-AudIT
 ' @author Mark Unwin <mark.unwin@firstwave.com>
-' @version   GIT: Open-AudIT_4.4.2
+' @version   GIT: Open-AudIT_5.6.0
 ' @copyright Copyright (c) 2022, Firstwave
 ' @license http://www.gnu.org/licenses/agpl-3.0.html aGPL v3
 
@@ -103,7 +103,7 @@ self_delete = "n"
 debugging = "1"
 
 ' Version - NOTE, special formatted so we match the *nix scripts and can do find/replace
-version="4.4.2"
+version="5.6.0"
 
 ' In normal use, DO NOT SET THIS.
 ' This value is passed in when running the audit_domain script.
@@ -122,8 +122,6 @@ ping_target = "n"
 ' set by the Discovery function - do not normally set this manually
 system_id = ""
 last_seen_by = "audit"
-
-details_to_lower = "y"
 
 help = "n"
 
@@ -222,9 +220,6 @@ For Each strArg in objArgs
 
             case "audit_win32_product"
             audit_win32_product = argvalue
-
-            case "details_to_lower"
-            details_to_lower = argvalue
 
             case "hide_audit_window"
             hide_audit_window = argvalue
@@ -328,10 +323,6 @@ if (help = "y") then
     wscript.echo "      *n - Tells the audit script to NOT query the win32_product class. It is recommended by Microsoft not to use this class as is causes Windows to check the integrity of all installed packages (resulting in 1035 events in the log) and can cause performance issues."
     wscript.echo "       y - Do query win32_product anyway and use the result to add to the list of installed software."
     wscript.echo ""
-    wscript.echo "  details_to_lower"
-    wscript.echo "      *y - Convert the hostname to lower."
-    wscript.echo "       n - Keep the hostname as per retrieved."
-    wscript.echo ""
     wscript.echo "  hide_audit_window"
     wscript.echo "      *n - Do not hide the audit script window when executing."
     wscript.echo "       y - Hide the audit script window when executing."
@@ -370,7 +361,6 @@ if debugging > "0" then
     wscript.echo "audit_store_software " & audit_store_software
     wscript.echo "create_file          " & create_file
     wscript.echo "debugging            " & debugging
-    wscript.echo "details_to_lower     " & details_to_lower
     wscript.echo "discovery_id         " & discovery_id
     wscript.echo "hide_audit_window    " & hide_audit_window
     wscript.echo "ldap                 " & ldap
@@ -782,12 +772,9 @@ if ((error_returned <> 0) or ((pc_alive = 0) and (ping_target = "y"))) then
                     end if
 
                     system_hostname = objRecordSet.Fields("Name").Value
+                    system_hostname = lcase(system_hostname)
                     dns_hostname = objRecordSet.Fields("dnshostname").Value
-
-                    if details_to_lower = "y" then
-                        system_hostname = lcase(system_hostname)
-                        dns_hostname = lcase(dns_hostname)
-                    end if
+                    dns_hostname = lcase(dns_hostname)
 
                     strParams = "%comspec% /c NSlookup " & dns_hostname
                     if debugging > "1" then wscript.echo "Looking up DNS entry for " & dns_hostname end if
@@ -813,15 +800,7 @@ if ((error_returned <> 0) or ((pc_alive = 0) and (ping_target = "y"))) then
                     next
                     computer_dns = replace(computer_dns, ".dc=", ".")
                     computer_dns = mid(computer_dns, 2)
-
-                    ' i = split(dns_hostname, ".")
-                    ' for j = 1 to ubound(i)
-                    '   computer_dns = computer_dns & "." & i(j)
-                    ' next
-
-                    if details_to_lower = "y" then
-                        computer_dns = lcase(computer_dns)
-                    end if
+                    computer_dns = lcase(computer_dns)
 
                     os_name = "Microsoft " & objRecordSet.Fields("operatingsystem").Value
                     family = os_family(objRecordSet.Fields("operatingsystem").Value)
@@ -981,7 +960,7 @@ for each objItem in colItems
     system_os_name = replace(system_os_name, "(R)", "")
     system_os_arch = objItem.OSArchitecture
     system_description = objItem.Description
-    if details_to_lower = "y" then system_description = lcase(system_description) end if
+    system_description = lcase(system_description)
     OSInstall = objItem.InstallDate
     OSInstall = Left(OSInstall, 8)
     OSInstallYear = Left(OSInstall, 4)
@@ -1031,9 +1010,7 @@ for each objItem in colItems
     'This is not used because it is not available on Win2000 or WinXP
     'system_hostname = LCase(objItem.DNSHostName)
     system_domain = objItem.Domain
-    if details_to_lower = "y" then
-        system_domain = lcase(system_domain)
-    end if
+    system_domain = lcase(system_domain)
 
     if (cint(windows_build_number) =< 3790) or (system_pc_num_processor = 0) then
         system_pc_num_processor = objItem.NumberOfProcessors
@@ -1065,7 +1042,7 @@ next
 if system_hostnme = "" then
     system_hostname = netbiosname
 end if
-if details_to_lower = "y" then system_hostname = lcase(system_hostname) end if
+system_hostname = lcase(system_hostname)
 
 
 if (cint(windows_build_number) > 5000) then
@@ -1112,10 +1089,8 @@ else
         windows_user_name = windows_user_name & windows_user_domain
     end if
 end if
-if details_to_lower = "y" then
-    windows_user_name = lcase(windows_user_name)
-    windows_user_domain = lcase(windows_user_domain)
-end if
+windows_user_name = lcase(windows_user_name)
+windows_user_domain = lcase(windows_user_domain)
 
 
 
@@ -1433,7 +1408,7 @@ else
     windows_active_directory_ou = ""
 end if
 
-if details_to_lower = "y" then windows_active_directory_ou = lcase(windows_active_directory_ou) end if
+windows_active_directory_ou = lcase(windows_active_directory_ou)
 
 if ((windows_part_of_domain = True Or windows_part_of_domain = "True") and (windows_user_work_1 > "") and use_active_directory = "y") then
     if (instr(windows_user_name, "@")) then
@@ -1543,9 +1518,12 @@ for each objItem in colItems
     windows_time_daylight = objItem.DaylightName
 next
 
+oReg.GetDWORDValue hkey_local_machine, "Software\Microsoft\Windows NT\CurrentVersion", "UBR", build_number
+build_number = windows_build_number & "." & build_number
+
 result.WriteText "  <windows>" & vbcrlf
 result.WriteText "      <item>" & vbcrlf
-result.WriteText "          <build_number>" & escape_xml(windows_build_number) & "</build_number>" & vbcrlf
+result.WriteText "          <build_number>" & escape_xml(build_number) & "</build_number>" & vbcrlf
 result.WriteText "          <user_name>" & escape_xml(windows_user_name) & "</user_name>" & vbcrlf
 result.WriteText "          <client_site_name>" & escape_xml(windows_client_site_name) & "</client_site_name>" & vbcrlf
 result.WriteText "          <domain_short>" & escape_xml(domain_nb) & "</domain_short>" & vbcrlf
@@ -1569,7 +1547,42 @@ result.WriteText "          <active_directory_ou>" & escape_xml(windows_active_d
 result.WriteText "      </item>" & vbcrlf
 result.WriteText "  </windows>" & vbcrlf
 
-
+Dim objWMIServiceSC,objAntiVirusProduct,colAVItems,AvStatus
+on error resume next
+Set objWMIServiceSC = GetObject("winmgmts:\\.\root\SecurityCenter2")
+error_returned = Err.Number
+on error goto 0
+if (error_returned <> 0 and debugging > "0") then wscript.echo check_wbem_error(error_returned) & " (SecurityCenter2)" : audit_wmi_fails = audit_wmi_fails & "SecurityCenter2 " : end if
+if (error_returned = 0) then
+    Set colAVItems = objWMIServiceSC.ExecQuery("Select * from AntiVirusProduct")
+    If colAVItems.count > 0 Then
+        result.WriteText "  <antivirus>" & vbcrlf
+        For Each objAntiVirusProduct In colAVItems
+            result.WriteText "      <item>" & vbcrlf
+            result.WriteText "          <name>" & escape_xml(objAntiVirusProduct.displayName) & "</name>" & vbcrlf
+            AvStatus = Hex(objAntiVirusProduct.ProductState)
+            if (objAntiVirusProduct.ProductState = "393472" or objAntiVirusProduct.ProductState = "266240" _
+                or objAntiVirusProduct.ProductState = "331776" or objAntiVirusProduct.ProductState = "397568" _
+                or Mid(AvStatus, 2, 2) = "10" Or Mid(AvStatus, 2, 2) = "11" or mid(AvStatus, 5, 2) = "10" or Mid(AvStatus, 5, 2) = "11") then
+                result.WriteText "          <state>On</state>" & vbcrlf
+            else
+                result.WriteText "          <state>Off</state>" & vbcrlf
+            end if
+            if Mid(AvStatus, 4, 2) = "00" then
+                result.WriteText "          <status>UpToDate</status>" & vbcrlf
+            elseif Mid(AvStatus, 4, 2) = "10" then
+                result.WriteText "          <status>OutOfDate</status>" & vbcrlf
+            end if
+            if (objAntiVirusProduct.displayName = "Windows Defender") then
+                result.WriteText "          <owner>Windows</owner>" & vbcrlf
+            else
+                result.WriteText "          <owner>NonMs</owner>" & vbcrlf
+            end if
+        next
+        result.WriteText "      </item>" & vbcrlf
+        result.WriteText "  </antivirus>" & vbcrlf
+    end if
+end if
 
 item = ""
 if (not isempty(objWMIService3)) then
@@ -2672,14 +2685,14 @@ for each objPartition In colPartitions
     set colLinks = objWMIService.ExecQuery("Select * FROM Win32_LogicalDiskToPartition",,32)
     error_returned = Err.Number : if (error_returned <> 0 and debugging > "0") then wscript.echo check_wbem_error(error_returned) & " (Win32_LogicalDiskToPartition)" : audit_wmi_fails = audit_wmi_fails & "Win32_LogicalDiskToPartition " : end if
     for each colLink in colLinks
-    if (inStr(colLink.Dependent, objPartition.DeviceID) > 0) then
-    partition_device_id_array = split(colLink.Antecedent, """")
-    partition_device_id = partition_device_id_array(1)
-    disk_index_array = split(partition_device_id, "#")
-    disk_index_new = disk_index_array(1)
-    partition_disk_index = mid(disk_index_new, 1, instr(disk_index_new, ",")-1)
-    disk_index_new = ""
-    end if
+        if (inStr(colLink.Dependent, objPartition.DeviceID) > 0) then
+            partition_device_id_array = split(colLink.Antecedent, """")
+            partition_device_id = partition_device_id_array(1)
+            disk_index_array = split(partition_device_id, "#")
+            disk_index_new = disk_index_array(1)
+            partition_disk_index = mid(disk_index_new, 1, instr(disk_index_new, ",")-1)
+            disk_index_new = ""
+        end if
     next
 
 
@@ -2910,7 +2923,11 @@ for each objItem in colItems
             share_permissions = share_permissions & """" & account & """:[" & permission & "],"
         end if
     next
-    share_permissions = "{" & left(share_permissions, (len(share_permissions)-1)) & "}"
+    if len(share_permissions) > 0 then
+        share_permissions = "{" & left(share_permissions, (len(share_permissions)-1)) & "}"
+    else
+        share_permissions = "{}"
+    end if
     result_share = result_share & "         <users>" & escape_xml(share_permissions) & "</users>" & vbcrlf
 
     result_share = result_share & "     </item>" & vbcrlf
@@ -3093,11 +3110,9 @@ if audit_dns = "y" then
                 for each objitem2 in colitems2
                     full_name = split(objItem2.OwnerName, ".")
                     hostname = full_name(0)
+                    hostname = lcase(hostname)
                     dns_full_name = objItem2.OwnerName
-                    if details_to_lower = "y" then
-                        hostname = lcase(hostname)
-                        dns_full_name = lcase(dns_host_name)
-                    end if
+                    dns_full_name = lcase(dns_host_name)
                     dns_ip_address = ""
                     dns_ip_address = objItem2.IPAddress
                     if debugging > "2" then 
@@ -3765,106 +3780,9 @@ if (audit_software = "y") then
         result.WriteText "      </item>" & vbcrlf
     end if
 
-    if debugging > "0" then wscript.echo "Codec info" end if
-    set colItems = objWMIService.ExecQuery("Select * FROM Win32_CodecFile", , 48)
-    error_returned = Err.Number : if (error_returned <> 0 and debugging > "0") then wscript.echo check_wbem_error(error_returned) & " (Win32_CodecFile)" : audit_wmi_fails = audit_wmi_fails & "Win32_CodecFile " : end if
-    if (not isnull(colItems)) then
-        for each objItem In colItems
-            if objItem.Manufacturer <> "Microsoft Corporation" then
-                result.WriteText "      <item>" & vbcrlf
-                result.WriteText "          <name>" & escape_xml(objItem.Group) & " - " & objItem.Filename & "</name>" & vbcrlf
-                result.WriteText "          <version>" & escape_xml(objItem.Version) & "</version>" & vbcrlf
-                result.WriteText "          <location>" & escape_xml(objItem.Caption) & "</location>" & vbcrlf
-                result.WriteText "          <install_date>" & escape_xml(objItem.InstallDate) & "</install_date>" & vbcrlf
-                result.WriteText "          <publisher>" & escape_xml(objItem.Manufacturer) & "</publisher>" & vbcrlf
-                result.WriteText "          <type>codec</type>" & vbcrlf
-                result.WriteText "      </item>" & vbcrlf
-            end if
-        next
-    end if
-
-
-
-    if debugging > "0" then wscript.echo "ODBC Driver info" end if
-    strKeyPath = "SOFTWARE\ODBC\ODBCINST.INI\ODBC Drivers"
-    oReg.EnumValues HKEY_LOCAL_MACHINE, strKeyPath, arrValueNames, arrValueTypes
-    if (not isnull(arrValueNames)) then
-        for i = 0 to UBound(arrValueNames)
-            strValueName = arrValueNames(i)
-            oReg.GetStringValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,strValue
-            if strValue = "Installed" then
-                oReg.GetStringValue HKEY_LOCAL_MACHINE,"SOFTWARE\ODBC\ODBCINST.INI\" & strValueName,"DriverODBCVer",driver_version
-                oReg.GetStringValue HKEY_LOCAL_MACHINE,"SOFTWARE\ODBC\ODBCINST.INI\" & strValueName,"Driver",file_name
-                result.WriteText "      <item>" & vbcrlf
-                result.WriteText "          <name>" & escape_xml(strValueName) & "</name>" & vbcrlf
-                result.WriteText "          <version>" & escape_xml(driver_version) & "</version>" & vbcrlf
-                result.WriteText "          <location>" & escape_xml(file_name) & "</location>" & vbcrlf
-                result.WriteText "          <type>odbc driver</type>" & vbcrlf
-                result.WriteText "      </item>" & vbcrlf
-            end if
-        next
-    end if
-
-
-    if debugging > "0" then wscript.echo "ODBC Driver info 64bit" end if
-    strKeyPath = "SOFTWARE\Wow6432Node\ODBC\ODBCINST.INI\ODBC Drivers"
-    oReg.EnumValues HKEY_LOCAL_MACHINE, strKeyPath, arrValueNames, arrValueTypes
-
-    if (isarray(arrValueNames)) then
-        for i = 0 to UBound(arrValueNames)
-            strValueName = arrValueNames(i)
-            oReg.GetStringValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,strValue
-            if strValue = "Installed" then
-                oReg.GetStringValue HKEY_LOCAL_MACHINE,"SOFTWARE\Wow6432Node\ODBC\ODBCINST.INI\" & strValueName,"DriverODBCVer",driver_version
-                oReg.GetStringValue HKEY_LOCAL_MACHINE,"SOFTWARE\Wow6432Node\ODBC\ODBCINST.INI\" & strValueName,"Driver",file_name
-                result.WriteText "      <item>" & vbcrlf
-                result.WriteText "          <name>" & escape_xml(strValueName) & "</name>" & vbcrlf
-                result.WriteText "          <version>" & escape_xml(driver_version) & "</version>" & vbcrlf
-                result.WriteText "          <location>" & escape_xml(file_name) & "</location>" & vbcrlf
-                result.WriteText "          <type>odbc driver</type>" & vbcrlf
-                result.WriteText "      </item>" & vbcrlf
-            end if
-        next
-    end if
-
-
-    if debugging > "0" then wscript.echo "MDAC info" end if
-    strKeyPath = "SOFTWARE\Microsoft\DataAccess"
-    strValueName = "Version"
-    oReg.GetStringValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,dac_version
-    if (not isnull(dac_version)) then
-        if SystemBuildNumber <> "6000" then
-            display_name = "MDAC"
-        else
-            display_name = "Windows DAC"
-        end if
-        result.WriteText "      <item>" & vbcrlf
-        result.WriteText "          <name>" & escape_xml(display_name) & "</name>" & vbcrlf
-        result.WriteText "          <version>" & escape_xml(dac_version) & "</version>" & vbcrlf
-        result.WriteText "          <install_date>" & escape_xml(system_pc_date_os_installation) & "</install_date>" & vbcrlf
-        result.WriteText "          <publisher>Microsoft Corporation</publisher>" & vbcrlf
-        result.WriteText "          <url>http://msdn2.microsoft.com/en-us/data/default.aspx</url>" & vbcrlf
-        result.WriteText "      </item>" & vbcrlf
-    end if
-
-    if debugging > "0" then wscript.echo "Windows Media Player info" end if
-    strKeyPath = "SOFTWARE\Microsoft\MediaPlayer\PlayerUpgrade"
-    strValueName = "PlayerVersion"
-    oReg.GetStringValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,wmp_version
-    if (not isnull(wmp_version)) then
-        result.WriteText "      <item>" & vbcrlf
-        result.WriteText "          <name>Windows Media Player</name>" & vbcrlf
-        result.WriteText "          <version>" & escape_xml(wmp_version) & "</version>" & vbcrlf
-        result.WriteText "          <install_date>" & escape_xml(system_pc_date_os_installation) & "</install_date>" & vbcrlf
-        result.WriteText "          <publisher>Microsoft Corporation</publisher>" & vbcrlf
-        result.WriteText "          <url>http://windows.microsoft.com/en-us/windows/windows-media-player</url>" & vbcrlf
-        result.WriteText "      </item>" & vbcrlf
-    end if
-
-
     if debugging > "0" then wscript.echo "Internet Explorer info" end if
     strKeyPath = "SOFTWARE\Microsoft\Internet Explorer"
-    strValueName = "Version"
+    strValueName = "svcVersion"
     oReg.GetStringValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,ie_version
     if (not isnull(ie_version)) then
         result.WriteText "      <item>" & vbcrlf
@@ -3875,7 +3793,6 @@ if (audit_software = "y") then
         result.WriteText "          <url>http://windows.microsoft.com/en-us/internet-explorer/internet-explorer-help</url>" & vbcrlf
         result.WriteText "      </item>" & vbcrlf
     end if
-
 
     if debugging > "0" then wscript.echo "Software info" end if
 
@@ -3963,9 +3880,7 @@ if (audit_software = "y") then
                         if (not isNull(message_retrieved)) then
                             if (InStr(message_retrieved, package_name) = 1) then
                                 package_installed_by = objItem.User
-                                if details_to_lower = "y" then
-                                    package_installed_by = lcase(package_installed_by)
-                                end if
+                                lcase(package_installed_by)
                                 package_installed_on = WMIDateStringToDate(objItem.TimeGenerated)
                                 package_installed_on = datepart("yyyy", package_installed_on) & "-" & datepart("m", package_installed_on) & "-" & datepart("d", package_installed_on) & " " & datepart("h", package_installed_on) & ":" & datepart("n", package_installed_on) & ":" & datepart("s", package_installed_on)
                                 exit for
@@ -4051,9 +3966,7 @@ if (audit_software = "y") then
                         if (not isNull(message_retrieved)) then
                             if (InStr(message_retrieved, package_name) = 1) then
                                 package_installed_by = objItem.User
-                                if details_to_lower = "y" then
-                                    package_installed_by = lcase(package_installed_by)
-                                end if
+                                lcase(package_installed_by)
                                 package_installed_on = WMIDateStringToDate(objItem.TimeGenerated)
                                 package_installed_on = datepart("yyyy", package_installed_on) & "-" & datepart("m", package_installed_on) & "-" & datepart("d", package_installed_on) & " " & datepart("h", package_installed_on) & ":" & datepart("n", package_installed_on) & ":" & datepart("s", package_installed_on)
                                 exit for
@@ -4177,9 +4090,7 @@ if (reg_node = "y") then
             if (not isNull(message_retrieved)) then
                 if (InStr(message_retrieved, package_name) = 1) then
                     package_installed_by = objItem.User
-                    if details_to_lower = "y" then
-                        package_installed_by = lcase(package_installed_by)
-                    end if
+                    package_installed_by = lcase(package_installed_by)
                     package_installed_on = WMIDateStringToDate(objItem.TimeGenerated)
                     package_installed_on = datepart("yyyy", package_installed_on) & "-" & datepart("m", package_installed_on) & "-" & datepart("d", package_installed_on) & " " & datepart("h", package_installed_on) & ":" & datepart("n", package_installed_on) & ":" & datepart("s", package_installed_on)
                     exit for
@@ -4321,9 +4232,7 @@ if address_width = "64" then
             if (not isNull(message_retrieved)) then
                 if (InStr(message_retrieved, package_name) = 1) then
                     package_installed_by = objItem.User
-                    if details_to_lower = "y" then
-                        package_installed_by = lcase(package_installed_by)
-                    end if
+                    package_installed_by = lcase(package_installed_by)
                     package_installed_on = WMIDateStringToDate(objItem.TimeGenerated)
                     package_installed_on = datepart("yyyy", package_installed_on) & "-" & datepart("m", package_installed_on) & "-" & datepart("d", package_installed_on) & " " & datepart("h", package_installed_on) & ":" & datepart("n", package_installed_on) & ":" & datepart("s", package_installed_on)
                     exit for
@@ -4386,7 +4295,7 @@ if (cint(windows_build_number) > 5000) then
     if (not isnull(colItems2)) then
         for each objItem2 in colItems2
             package_installed_by = objItem2.InstalledBy
-            if details_to_lower = "y" then package_installed_by = lcase(package_installed_by) end if
+            package_installed_by = lcase(package_installed_by)
             result.WriteText "      <item>" & vbcrlf
             result.WriteText "          <name>" & escape_xml(objItem2.HotFixID) & "</name>" & vbcrlf
             result.WriteText "          <install_date>" & escape_xml(objItem2.InstalledOn) & "</install_date>" & vbcrlf
@@ -4421,7 +4330,7 @@ for each objItem in colItems
     result.WriteText "      </item>" & vbcrlf
 
     service_name = objItem.Name
-    if details_to_lower = "y" then service_name = lcase(service_name) end if
+    service_name = lcase(service_name)
     test_name = lcase(service_name)
 
     select case test_name
@@ -4573,12 +4482,12 @@ if ((en_sql_server = "y") or (en_sql_express = "y")) then
     oReg.EnumValues HKEY_LOCAL_MACHINE, strKeyPath, sql_instances, arrValueTypes
 
     if isnull(sql_instances) then
-    ' we did not return any instances - maybe SQL 2000 or SQL Express?
-    sql_instances = array("MSSQLSERVER")
+        ' we did not return any instances - maybe SQL 2000 or SQL Express?
+        sql_instances = array("MSSQLSERVER")
     else
-    For Each value In sql_instances
-    if debugging > "1" then wscript.echo "Instance: " & value end if
-    next
+        For Each value In sql_instances
+            if debugging > "1" then wscript.echo "Instance: " & value end if
+        next
     end if
 
     i = ""
@@ -4648,42 +4557,42 @@ if ((en_sql_server = "y") or (en_sql_express = "y")) then
     if debugging > "1" then wscript.echo "SQL State: " & en_sql_server_state end if
 
     if ( (en_sql_server_state = "Running") and (((i = 1) or (i = 2)) or db_type = "SQL Server Express")) then
-    which_instance = ""
-    for each instance in sql_instances
-    if instance = "MSSQLSERVER" then which_instance = "MSSQLSERVER" end if
-    next
+        which_instance = ""
+        for each instance in sql_instances
+            if instance = "MSSQLSERVER" then which_instance = "MSSQLSERVER" end if
+        next
 
-    if ((which_instance = "") and (sql_instances(0) <> "")) then which_instance = sql_instances(0)
+        if ((which_instance = "") and (sql_instances(0) <> "")) then which_instance = sql_instances(0)
 
-    if ((db_type = "SQL Server") and (which_instance = "MSSQLSERVER")) then
-    strBaseConnection ="Provider=SQLOLEDB;Integrated Security=SSPI;Persist Security Info=False;Data Source=" & system_hostname & ";DATABASE=master"
-    end if
+        if ((db_type = "SQL Server") and (which_instance = "MSSQLSERVER")) then
+            strBaseConnection ="Provider=SQLOLEDB;Integrated Security=SSPI;Persist Security Info=False;Data Source=" & system_hostname & ";DATABASE=master"
+        end if
 
-    if ((db_type = "SQL Server") and (which_instance <> "MSSQLSERVER")) then
-    strBaseConnection ="Provider=SQLOLEDB;Integrated Security=SSPI;Persist Security Info=False;Data Source=" & system_hostname & "\" & which_instance & ";DATABASE=master"
-    end if
+        if ((db_type = "SQL Server") and (which_instance <> "MSSQLSERVER")) then
+            strBaseConnection ="Provider=SQLOLEDB;Integrated Security=SSPI;Persist Security Info=False;Data Source=" & system_hostname & "\" & which_instance & ";DATABASE=master"
+        end if
 
-    if ((db_type = "SQL Server Express") and (which_instance = "MSSQLSERVER")) then
-    strBaseConnection = "Provider=SQLOLEDB;Integrated Security=SSPI;Persist Security Info=False;Data Source=" & system_hostname & "\SQLEXPRESS;Initial Catalog=master;"
-    end if
+        if ((db_type = "SQL Server Express") and (which_instance = "MSSQLSERVER")) then
+            strBaseConnection = "Provider=SQLOLEDB;Integrated Security=SSPI;Persist Security Info=False;Data Source=" & system_hostname & "\SQLEXPRESS;Initial Catalog=master;"
+        end if
 
-    if ((db_type = "SQL Server Express") and (which_instance <> "MSSQLSERVER")) then
-    strBaseConnection = "Provider=SQLOLEDB;Integrated Security=SSPI;Persist Security Info=False;Data Source=" & system_hostname & "\" & which_instance & ";Initial Catalog=master;"
-    end if
+        if ((db_type = "SQL Server Express") and (which_instance <> "MSSQLSERVER")) then
+            strBaseConnection = "Provider=SQLOLEDB;Integrated Security=SSPI;Persist Security Info=False;Data Source=" & system_hostname & "\" & which_instance & ";Initial Catalog=master;"
+        end if
 
-    if debugging > "1" then wscript.echo "Which Instance: " & which_instance end if
-    if debugging > "1" then wscript.echo strBaseConnection end if
+        if debugging > "1" then wscript.echo "Which Instance: " & which_instance end if
+        if debugging > "1" then wscript.echo strBaseConnection end if
 
-    Set objDBConnection = CreateObject("ADODB.Connection")
-    on error resume next
-    objDBConnection.Open(strBaseConnection)
-    error_returned = Err.Number
-    objDBConnection.Close
-    on error goto 0
-    if (error_returned <> 0) then
-    if debugging > "1" then wscript.echo "Could not connect to SQL (possibly Express, SSRS, SSIS or SSAS)" end if
-    if debugging > "1" then wscript.echo "Description: " & error_description end if
-    end if
+        Set objDBConnection = CreateObject("ADODB.Connection")
+        on error resume next
+            objDBConnection.Open(strBaseConnection)
+            error_returned = Err.Number
+            objDBConnection.Close
+        on error goto 0
+        if (error_returned <> 0) then
+            if debugging > "1" then wscript.echo "Could not connect to SQL (possibly Express, SSRS, SSIS or SSAS)" end if
+            if debugging > "1" then wscript.echo "Description: " & error_description end if
+        end if
     end if
 
     server = server & "     <item>" & vbcrlf
@@ -7406,6 +7315,7 @@ function form_factor(system_form_factor)
     if system_form_factor = "24" then system_form_factor = "Sealed-case PC"  end if
     if system_form_factor = "30" then system_form_factor = "Tablet" end if
 	if system_form_factor = "31" then system_form_factor = "Convertible" end if
+    if system_form_factor = "32" then system_form_factor = "Detachable" end if
     if system_form_factor = "35" then system_form_factor = "Mini PC" end if                                                                                                                                    
     form_factor = system_form_factor
 end function

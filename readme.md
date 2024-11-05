@@ -7,15 +7,15 @@ Open-AudIT is an application to tell you exactly what is on your network, how it
 
 Windows PCs can be queried for hardware, software, operating system settings, security settings, IIS settings, services, users & groups and much more. Linux systems can be queried for a similar amount of information. Network devices (printers, switches, routers, etc) can have data recorded such as IP-Address, MAC Address, open ports, serial number, etc, etc.
 
-![Home](https://github.com/Opmantek/open-audit/raw/master/www/open-audit/images/community_home.png)<br>
-![Devices](https://github.com/Opmantek/open-audit/raw/master/www/open-audit/images/community_devices.png)<br>
+![Devices](https://github.com/Opmantek/open-audit/raw/master/public/images/devices.png)<br>
+![Summaries](https://github.com/Opmantek/open-audit/raw/master/public/images/summaries.png)<br>
 
 # Open-AudIT Enterprise
 
 [Firstwave](https://www.firstwave.com) offer Open-AudIT Enterprise which leverages from Open-AudIT to provide extra features and benefits as well as an easy to use installer for Windows and Linux. Please consider purchasing a license to assist with the continued development of Open-AudIT.
 
-![Home](https://github.com/Opmantek/open-audit/raw/master/www/open-audit/images/dashboards.png)<br>
-![Devices](https://github.com/Opmantek/open-audit/raw/master/www/open-audit/images/devices.png)<br>
+![Home](https://github.com/Opmantek/open-audit/raw/master/public/images/dashboards.png)<br>
+
 
 
 ## Getting Started
@@ -28,19 +28,26 @@ Nmap is a prerequisite for Open-AudIT. We rely on Nmap for discovering devices o
 
 The other Linux prerequisites are:
 
-#### RedHat / Centos
+#### RedHat 8 & 9
 
-mariadb-server httpd php php-cli php-mysqlnd php-ldap php-json php-mbstring php-process php-snmp php-xml nmap zip curl wget sshpass screen samba-client logrotate perl-Time-ParseDate ipmitool rrdtool libpng12
+mariadb-server httpd php php-cli php-intl php-mysqlnd php-ldap php-json php-mbstring php-process php-snmp php-xml nmap zip curl wget sshpass screen samba-client logrotate perl-Time-ParseDate ipmitool net-snmp perl-Crypt-CBC libnsl.x86_64
 
-#### Debian / Ubuntu
+#### Debian 11 & 12 
 
-mariadb-server apache2 apache2-utils libapache2-mod-php openssh-client php php-cli php-curl php-ldap php-mbstring php-mysql php-snmp php-xml nmap zip wget curl sshpass screen smbclient logrotate ipmitool rrdtool libpng12-0 awscli
+mariadb-server apache2 apache2-utils libapache2-mod-php openssh-client php php-cli php-curl php-intl php-ldap php-mbstring php-mysql php-snmp php-xml nmap zip wget curl sshpass screen smbclient logrotate ipmitool snmp libcrypt-cbc-perl
+
+#### Ubuntu 20.04 & 22.04
+
+mariadb-server apache2 apache2-utils libapache2-mod-php openssh-client php php-cli php-curl php-intl php-ldap php-mbstring php-mysql php-snmp php-xml nmap zip wget curl sshpass screen smbclient logrotate ipmitool snmp libcrypt-cbc-perl
 
 ### Installing
 
-Installing is simply a matter of downloading the .run or .exe (Linux or Windows). The installer is self-contained and will install Linux prerequisites. Windows users will need to download and install Nmap.
+Installing is simply a matter of downloading the .run or .exe (Linux or Windows) from http://firstwave.com. The installer is self-contained and will install Linux prerequisites. Windows users will need to download and install Nmap.
 
-To install from this source, please it in /usr/local/open-audit and copy the www folder into your web root under /open-audit. Initialise a MySQL database using the credentials found in code_igniter/application/config/database.php. The MySQL schema can be found in other/open-audit_mysql.sql.
+To install from this source, please put the code in /usr/local/open-audit and link the public folder into your web root under /open-audit. Use composer to install the required dependencies. Initialise a MySQL database using the credentials found in app/Config/database.json. The MySQL schema can be found in other/open-audit.sql.
+
+## Release Notes
+Are available here - https://community.opmantek.com/display/OA/Open-AudIT+Release+Notes
 
 ## Built With
 

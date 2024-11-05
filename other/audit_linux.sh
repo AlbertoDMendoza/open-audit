@@ -24,7 +24,7 @@
 
 # @package Open-AudIT
 # @author Mark Unwin <mark.unwin@firstwave.com>
-# @version   GIT: Open-AudIT_4.4.2
+# @version   GIT: Open-AudIT_5.6.0
 # @copyright Copyright (c) 2022, Firstwave
 # @license http://www.gnu.org/licenses/agpl-3.0.html aGPL v3
 
@@ -73,7 +73,7 @@ self_delete="n"
 debugging=2
 
 # Version
-version="4.4.2"
+version="5.6.0"
 
 # Display help
 help="n"
@@ -218,7 +218,7 @@ last_char ()
    lc=""
    str="${1}"
    slen=${#1}
-   if [ "${slen}" > "1" ]; then
+   if [ "${slen}" -gt "1" ]; then
       lcp=$((slen-1))
       lc="${str:$lcp}"
    fi
@@ -553,13 +553,9 @@ if [ -z "$system_uuid" ] && [ -f "/sys/devices/virtual/dmi/id/product_uuid" ]; t
 	system_uuid=$(cat /sys/devices/virtual/dmi/id/product_uuid 2>/dev/null)
 fi
 
-# Get the hostname & DNS domain
+# Get the hostname & domain
 system_domain=$(hostname -d 2>/dev/null | grep -v \(none\))
 system_fqdn=$(hostname -f 2>/dev/null | grep -v \(none\))
-
-dns_hostname=$(hostname --short 2>/dev/null | head -n1 | cut -d. -f1)
-dns_domain=$(hostname --domain 2>/dev/null)
-dns_fqdn=$(hostname --fqdn 2>/dev/null | head -n1)
 
 # Get System Family (Distro Name) and the OS Name
 # Debian and Ubuntu will match on the below
@@ -571,7 +567,13 @@ system_os_group="Linux"
 # system_os_name=$(lsb_release -ds 2>/dev/null | tr -d '"' | head -n1)
 # system_os_version=$(lsb_release -rs 2>/dev/null | tr -d '"')
 system_os_family=$(cat /etc/os-release 2>/dev/null | grep -i ^NAME | cut -d= -f2 | cut -d\" -f2)
-system_os_name=$(cat /etc/os-release 2>/dev/null | grep -i ^PRETTY_NAME | cut -d= -f2 | cut -d\" -f2)
+if [ -f "/etc/redhat-release" ]; then
+	# To cater to a RHEL 7 machine that has RHEL in /etc/os-release PRETTY_NAME
+	system_os_name=$(cat /etc/redhat-release 2>/dev/null)
+fi
+if [ -z "$system_os_name" ]; then
+	system_os_name=$(cat /etc/os-release 2>/dev/null | grep -i ^PRETTY_NAME | cut -d= -f2 | cut -d\" -f2)
+fi
 system_os_version=$(cat /etc/os-release 2>/dev/null | grep -i ^VERSION_ID | cut -d= -f2 | cut -d\" -f2)
 system_manufacturer=""
 system_model=""
@@ -709,7 +711,7 @@ if [ "$system_os_family" == "Common Base Linux Mariner" ]; then
 	system_os_name="Mariner Linux"
 fi
 
-if [[ "$system_os_family" == *"suse"* ]] || [[ "$system_os_family" == *"SUSE"* ]] || [[ "$system_os_family" == *"SuSE"* ]] || [[ "$system_os_family" == *"SuSe"* ]]; then
+if [[ "$system_os_family" == *"suse"* ]] || [[ "$system_os_family" == *"SUSE"* ]] || [[ "$system_os_family" == *"SuSE"* ]] || [[ "$system_os_family" == *"SuSe"* ]] || [[ "$system_os_family" == *"SLES"* ]]; then
 	system_os_family="Suse"
 	system_os_version=$(grep VERSION_ID /etc/os-release | cut -d\" -f2)
 	system_os_name=$(grep PRETTY_NAME /etc/os-release | cut -d\" -f2)
@@ -734,6 +736,11 @@ fi
 if [ -z "$system_ip_address" ]; then
 	system_ip_address=$(ip addr | grep 'state UP' -A2 | grep inet | awk '{print $2}' | cut -f1  -d'/' | head -n 1)
 fi
+
+# Use the primary IP to find the DNS details
+dns_hostname=$(getent hosts $system_ip_address 2>/dev/null | cut -d" " -f3 | cut -d. -f1)
+dns_domain=$(getent hosts $system_ip_address 2>/dev/null | cut -d" " -f3 | cut -d. -f2-)
+dns_fqdn=$(getent hosts $system_ip_address 2>/dev/null | cut -d" " -f3)
 
 # Set the icon as the lower case version of the System Family.
 if [ -z "$system_os_icon" ]; then
@@ -932,6 +939,17 @@ else
 	system_pc_date_os_installation=""
 fi
 
+kernel_version=$(uname -r 2>/dev/null)
+if [ -z "$kernel_version" ]; then
+	kernel_version=$(hostnamectl 2>/dev/null | grep "Kernel" | cut -d: -f2 | cut -d" " -f3)
+fi
+
+last_os_update=$(stat -c %y /var/lib/apt/periodic/update-success-stamp 2>/dev/null | cut -d. -f1)
+if [ -z "$last_os_update" ]; then
+	lou=$(rpm -qa --last 2>/dev/null | head -1 | awk '{printf $2" "$3" "$4" "$5" "$6" "$7}')
+	last_os_update=$(date -d "$lou" +"%Y-%m-%d %H:%m:%S" 2>/dev/null)
+fi
+
 #'''''''''''''''''''''''''''''''''
 #' Write to the audit file       '
 #'''''''''''''''''''''''''''''''''
@@ -954,6 +972,7 @@ echo "		<os_group>$(escape_xml "$system_os_group")</os_group>"
 echo "		<os_family>$(escape_xml "$system_os_family")</os_family>"
 echo "		<os_name>$(escape_xml "$system_os_name")</os_name>"
 echo "		<os_version>$(escape_xml "$system_os_version")</os_version>"
+echo "		<kernel_version>$(escape_xml "$kernel_version")</kernel_version>"
 echo "		<serial>$(escape_xml "$system_serial")</serial>"
 echo "		<model>$(escape_xml "$system_model")</model>"
 echo "		<manufacturer>$(escape_xml "$system_manufacturer")</manufacturer>"
@@ -966,6 +985,7 @@ echo "		<processor_count>$(escape_xml "$system_pc_total_threads")</processor_cou
 echo "		<os_installation_date>$(escape_xml "$system_pc_date_os_installation")</os_installation_date>"
 echo "		<org_id>$(escape_xml "$org_id")</org_id>"
 echo "		<dbus_identifier>$(escape_xml "$dbus_identifier")</dbus_identifier>"
+echo "		<last_os_update>$(escape_xml "$last_os_update")</last_os_update>"
 if [ -n "$instance_ident" ]; then
 echo "		<instance_ident>$(escape_xml "$instance_ident")</instance_ident>"
 fi
@@ -974,6 +994,7 @@ echo "		<id>$(escape_xml "$system_id")</id>"
 echo "		<discovery_id>$(escape_xml "$discovery_id")</discovery_id>"
 echo "	</sys>"
 } > "$xml_file"
+
 
 
 
@@ -1501,7 +1522,7 @@ case $system_os_family in
 					tail -n +6 >>\
 					"$xml_file"
 			;;
-		'CentOS' | 'RedHat' | 'SUSE' | 'Fedora' | 'Suse' | 'Amazon' )
+		'CentOS' | 'RedHat' | 'Fedora' | 'Suse' | 'Amazon' )
 				service smb status > /dev/null 2>&1 &&\
 					sed -e '/^$/d' -e 's/^[ \t]*//' -e '/^[#;]/d' /etc/samba/smb.conf |\
 					grep -E "^\[|^comment|^path" |\
@@ -1743,9 +1764,10 @@ if [ -n "$net_cards" ]; then
 		else
 			# This is a wireless link
 			if [ -z "$(which iwlist 2>/dev/null)" ]; then
-				net_card_speed=$(iwlist "$net_card_id" bitrate | grep Current  | cut -d. -f1 | grep -oE '[[:digit:]]*')
-			else
+				# we don't have iwlist installed
 				net_card_speed=""
+			else
+				net_card_speed=$(iwlist "$net_card_id" bitrate | grep Current  | cut -d. -f1 | grep -oE '[[:digit:]]*')
 			fi
 			net_card_type="Wireless Ethernet 802.11"
 		fi
@@ -2215,15 +2237,19 @@ IFS="$NEWLINEIFS";
 for line in $(docker ps -a --format "{{.ID}}\t{{.Names}}\t{{.Status}}" 2>/dev/null); do
 	vm_ident=$(echo "$line" | awk '{print $1}')
 	name=$(echo "$line" | awk '{print $2}')
-	status=$(echo "$line" | awk '{print $3}')
-	uuid=""
+	status=$(echo "$line" | awk '{print $4}')
+	uuid=$(echo "$line" | awk '{print $1}')
+	config_file=$(echo "$line" | awk '{print $3}')
+	uuid=$(echo "$line" | awk '{print $1}')
 	vm_result=$vm_result"
 		<item>
 			<vm_ident>$(escape_xml "$vm_ident")</vm_ident>
-			<name>$(escape_xml "$name")</name>
-			<status>$(escape_xml "$status")</status>
-			<uuid>$(escape_xml "$uuid")</uuid>
-			<type>docker</type>
+         <name>$(escape_xml "$name")</name>
+         <status>$(escape_xml "$status")</status>
+         <uuid>$(escape_xml "$uuid")</uuid>
+         <config_file>$(escape_xml "$config_file")</config_file>
+         <type>docker</type>
+         <icon>docker</icon>
 		</item>"
 done
 
@@ -2262,6 +2288,7 @@ if [ -n "$guests" ]; then
 			<cpu_count>"$(escape_xml "$guest_cpu_count")"</cpu_count>
 			<config_file>"$(escape_xml "$guest_config_file")"</config_file>
 			<type>proxmox</type>
+			<icon>proxmox</icon>
 		</item>"
 		fi
 	done
@@ -2292,6 +2319,7 @@ if [ -n "$lxcguests" ]; then
 			<cpu_count>"$(escape_xml "$guest_cpu_count")"</cpu_count>
 			<config_file>"$(escape_xml "$guest_config_dir${guest_id}.conf")"</config_file>
 			<type>lxc</type>
+			<icon>lxc</icon>
 		</item>"
 	done
 fi
@@ -2429,10 +2457,10 @@ if [ "$system_os_family" != "Arch" ]; then
 fi
 # Puppet facts
 if [ -n "$(which facter 2>/dev/null)" ]; then
-    exclusions=" system_uptime memoryfree memoryfree_mb sshdsakey sshfp_dsa sshfp_rsa sshrsakey swapfree swapfree_mb system_uptime "
+    puppet_exclusions=" system_uptime memoryfree memoryfree_mb sshdsakey sshfp_dsa sshfp_rsa sshrsakey swapfree swapfree_mb system_uptime "
     for variable in $(facter -p); do
         name=$( echo "$variable" | cut -d" " -f1 )
-        if [ -z "$(echo "$exclusions" | grep " $name ")" ]; then
+        if [ -z "$(echo "$puppet_exclusions" | grep " $name ")" ]; then
             value=$(echo "$variable" | cut -d" " -f3-)
             echo "      <item>" >> "$xml_file"
             echo "          <program>facter</program>" >> "$xml_file"
@@ -2610,6 +2638,11 @@ if [ -f "/usr/local/omk/bin/show_versions.pl" ]; then
 		if [[ "$name" == *"opReports"* ]]; then
 			installed_on=$(env stat --format=%y /usr/local/omk/lib/ReportsController.pm.exe 2>/dev/null | cut -d. -f1)
 		fi
+		if [[ "$name" == *"No"* ]]; then
+			# A weird edge case to account for 
+			# No OMK manifest file at '/data/opmojo/bin/../manifest'.
+			continue
+		fi
 		echo "		<item>" >> "$xml_file"
 		echo "			<name>$(escape_xml $name)</name>" >> "$xml_file"
 		echo "			<version>$(escape_xml $version)</version>" >> "$xml_file"
@@ -2620,6 +2653,21 @@ if [ -f "/usr/local/omk/bin/show_versions.pl" ]; then
 		echo "			<installed_on>$(escape_xml $installed_on)</installed_on>" >> "$xml_file"
 		echo "		</item>" >> "$xml_file"
 	done
+fi
+if [ -f "/usr/local/open-audit/app/Config/OpenAudit.php" ]; then
+	# Open-AudiT 5 and greater
+	name="Open-AudIT"
+	version=$(grep displayVersion /usr/local/open-audit/app/Config/OpenAudit.php | cut -d\' -f2)
+	installed_on=$(env stat --format=%y /usr/local/open-audit/app/Config/View.php 2>/dev/null | cut -d. -f1)
+	echo "		<item>" >> "$xml_file"
+	echo "			<name>$(escape_xml $name)</name>" >> "$xml_file"
+	echo "			<version>$(escape_xml $version)</version>" >> "$xml_file"
+	echo "			<description></description>" >> "$xml_file"
+	echo "			<url>https://firstwave.com</url>" >> "$xml_file"
+	echo "			<publisher>FirstWave</publisher>" >> "$xml_file"
+	echo "			<location>/usr/local/open-audit</location>" >> "$xml_file"
+	echo "			<installed_on>$(escape_xml $installed_on)</installed_on>" >> "$xml_file"
+	echo "		</item>" >> "$xml_file"
 fi
 # Detect Quest InTrust agent
 adcscm_path=`service adcscm.linux_intel status 2>/dev/null | grep '\-service' | awk '{ print $3 }'`
@@ -2642,7 +2690,7 @@ case $system_os_family in
 			dpkg-query --show --showformat="\t\t<item>\n\t\t\t<name><![CDATA[\${Package}]]></name>\n\t\t\t<version><![CDATA[\${Version}]]></version>\n\t\t\t<url></url>\n\t\t</item>\n" |\
 				sed -e 's/\&.*]]/]]/' >> "$xml_file"
 			;;
-		'CentOS' | 'RedHat' | 'SUSE' | 'Fedora' | 'Suse' | 'Amazon' | 'Mariner' )
+		'CentOS' | 'RedHat' | 'Fedora' | 'Suse' | 'Amazon' | 'Mariner' | 'AlmaLinux' )
 			rpm -qa --queryformat="\t\t<item>\n\t\t\t<name><\!\[CDATA\[%{NAME}\]\]></name>\n\t\t\t<version><\!\[CDATA\[%{VERSION}-%{RELEASE}\]\]></version>\n\t\t\t<url><\!\[CDATA\[%{URL}\]\]></url>\n\t\t</item>\n" |\
 				sed -e 's/\&.*]]/]]/' >> "$xml_file"
 			;;
@@ -2702,9 +2750,8 @@ if hash systemctl 2>/dev/null; then
 	if [ "$debugging" -gt "1" ]; then
 		echo "    systemd services"
 	fi
-	# systemd_services=$(systemctl list-units -all --type=service --no-pager --no-legend 2>/dev/null | cut -d" " -f1 | cut -d. -f1)
-	systemd_services=$(systemctl list-units -all --type=service --no-pager --no-legend 2>/dev/null | sed 's/^.//' | awk '{ print $1 }' | cut -d. -f1)
-	for name in      $(systemctl list-units -all --type=service --no-pager --no-legend 2>/dev/null | sed 's/^.//' | awk '{ print $1 }'); do
+	systemd_services=$(systemctl list-units -all --type=service --no-pager --no-legend 2>/dev/null | grep -v ● | awk '{ print $1 }' | cut -d. -f1)
+	for name in      $(systemctl list-units -all --type=service --no-pager --no-legend 2>/dev/null | grep -v ● | awk '{ print $1 }'); do
 		description=$(systemctl show "$name" -p Description | cut -d= -f2)
 		description="$description (using systemd)"
 		binary=$(systemctl show "$name" -p ExecStart | cut -d" " -f2 | cut -d= -f2 | sort -u)
@@ -2721,6 +2768,7 @@ if hash systemctl 2>/dev/null; then
 		service_name=$(lcase "$name")
 		suffix=".service"
 		service_name=${service_name%$suffix}
+		service_name=$(systemd-escape --unescape "$service_name")
 		{
 		echo "		<item>"
 		echo "			<name>$(escape_xml "$service_name")</name>"
@@ -2735,7 +2783,6 @@ if hash systemctl 2>/dev/null; then
 fi
 
 if [ "$system_os_family" = "Ubuntu" ] || [ "$system_os_family" = "Debian" ]; then
-	#INITDEFAULT=$(awk -F= ' /^env\ DEFAULT_RUNLEVEL/ { print $2 } ' /etc/init/rc-sysinit.conf)
 	INITDEFAULT=$(awk -F= ' /^env\ DEFAULT_RUNLEVEL/ { print $2 } ' /etc/init/rc-sysinit.conf 2>/dev/null)
 	# upstart services
 	if [ -n `which initctl 2>/dev/null` ]; then
@@ -2775,7 +2822,7 @@ if [ "$system_os_family" = "Ubuntu" ] || [ "$system_os_family" = "Debian" ]; the
 	fi
 fi
 
-if [ "$system_os_family" = "CentOS" ] || [ "$system_os_family" = "RedHat" ] || [ "$system_os_family" = "SUSE" ] || [ "$system_os_family" = "Suse" ] || [ "$system_os_family" = "Amazon" ] || [ "$system_os_family" = "Mariner" ]; then
+if [ "$system_os_family" = "CentOS" ] || [ "$system_os_family" = "RedHat" ] || [ "$system_os_family" = "Suse" ] || [ "$system_os_family" = "Amazon" ] || [ "$system_os_family" = "Mariner" ]; then
 	INITDEFAULT=$(awk -F: '/id:/,/:initdefault:/ { print $2 }' /etc/inittab)
 fi
 
@@ -2795,7 +2842,7 @@ for service in /etc/init.d/* ; do
 		systemctl=$(which systemctl 2>/dev/null)
 		if [ -n "$systemctl" ]; then
 			# systemd is present - ask it
-			service_state=$(service "$service_name" status 2>/dev/null | grep " Active:" | awk '{ print $2 }')
+			service_state=$(systemctl show "$service_name" -p ActiveState | grep " Active:" | awk '{ print $2 }')
 			service_description=$(systemctl show "$service_name" -p Description | cut -d= -f2)
 			service_binary=$(systemctl show "$service_name" -p ExecStart | cut -d" " -f2 | cut -d= -f2)
 		fi
@@ -3598,6 +3645,71 @@ if [ "$busybox" = "n" ]; then
 		done
 	done
 	echo "	</file>" >> "$xml_file"
+fi
+
+
+########################################################
+# EXECUTABLES                                         #
+########################################################
+if [ "$debugging" -gt "0" ]; then
+	echo "Executable Files Info"
+fi
+if [ "$busybox" = "n" ]; then
+	echo "	<executable>" >> "$xml_file"
+	for dir in ${executables[@]}; do
+		command="find \"$dir\" -type f | cut -d: -f1"
+		if [ -n "$exclusions" ]; then
+			command="$command | grep -Ev \"$exclusions\""
+		fi
+		for file in $(eval "$command"); do
+			description=""
+			description=$(file -b "$file" | grep executable)
+			package=""
+
+			if [ -n "$description" ]; then
+				case $system_os_family in
+					'Ubuntu' | 'Debian' | 'LinuxMint' | 'Raspbian' )
+						package=$(dpkg -S "$file" 2>/dev/null | cut -d: -f1)
+					;;
+					'CentOS' | 'RedHat' | 'Fedora' | 'Suse' | 'Amazon' | 'Mariner' | 'AlmaLinux' )
+						package=$(rpm -qf "$file" 2>/dev/null | grep -v "is not owned by any package")
+					;;
+				esac
+			fi
+
+			if [ -z "$package" ] && [ -n "$description" ]; then
+				file_size=$(stat --printf="%s" "$file")
+				file_directory=$(dirname "$file")
+				file_hash=$(sha1sum "$file" | cut -d" " -f1)
+				file_last_changed=$(stat -c %y "$file" | cut -d. -f1)
+				file_meta_last_changed=$(stat -c %z "$file" | cut -d. -f1)
+				file_permissions=$(stat -c "%a" "$file")
+				file_owner=$(ls -ld "$file" | awk '{print $3}')
+				file_group=$(ls -ld "$file" | awk '{print $4}')
+				inode=$(ls -li "$file" | awk '{print $1}')
+
+				file_name=$(basename "$file")
+				{
+				echo "		<item>"
+				echo "			<name>$(escape_xml "$file_name")</name>"
+				echo "			<full_name>$(escape_xml "$file")</full_name>"
+				echo "			<size>$(escape_xml "$file_size")</size>"
+				echo "			<directory>$(escape_xml "$file_directory")</directory>"
+				echo "			<description>$(escape_xml "$description")</description>"
+				echo "			<hash>$(escape_xml "$file_hash")</hash>"
+				echo "			<last_changed>$(escape_xml "$file_last_changed")</last_changed>"
+				echo "			<meta_last_changed>$(escape_xml "$file_meta_last_changed")</meta_last_changed>"
+				echo "			<permission>$(escape_xml "$file_permissions")</permission>"
+				echo "			<package>$(escape_xml "$package")</package>"
+				echo "			<owner>$(escape_xml "$file_owner")</owner>"
+				echo "			<group>$(escape_xml "$file_group")</group>"
+				echo "			<inode>$(escape_xml "$inode")</inode>"
+				echo "		</item>"
+				} >> "$xml_file"
+			fi
+		done
+	done
+	echo "	</executable>" >> "$xml_file"
 fi
 
 

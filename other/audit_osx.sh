@@ -24,7 +24,7 @@
 
 # @package Open-AudIT
 # @author Mark Unwin <mark.unwin@firstwave.com>
-# @version   GIT: Open-AudIT_4.4.2
+# @version   GIT: Open-AudIT_5.6.0
 # @copyright Copyright (c) 2022, Firstwave
 # @license http://www.gnu.org/licenses/agpl-3.0.html aGPL v3
 
@@ -44,7 +44,7 @@ system_id=""
 last_seen_by="audit"
 
 # Version
-version="4.4.2"
+version="5.6.0"
 
 # DO NOT REMOVE THE LINE BELOW
 # Configuration from web UI here
@@ -131,10 +131,10 @@ if [[ $system_hostname == *"."* ]]; then
 else
     system_domain=""
 fi
-system_os_version=$(sw_vers | grep "ProductVersion:" | cut -f2)
+system_os_version=$(sw_vers | grep "ProductVersion:" | cut -d: -f2 | xargs)
 system_os_version_major=$(echo "$system_os_version" | cut -d. -f1)
 system_os_version_minor=$(echo "$system_os_version" | cut -d. -f2)
-system_os_name="OSX $system_os_version"
+system_os_name="MacOS $system_os_version"
 system_serial=$(system_profiler SPHardwareDataType | grep 'Serial Number (system):' | cut -d':' -f2 | sed 's/^ *//g')
 manufacturer_code=""
 if [[ ${#system_serial} = 11 ]]; then
@@ -158,6 +158,13 @@ if [ "$system_pc_os_arch" == "arm64" ]; then
 fi
 system_pc_date_os_installation=$(date -r $(stat -f "%B" /private/var/db/.AppleSetupDone) "+%Y-%m-%d %H:%M:%S")
 
+for line in $(system_profiler SPNetworkDataType | grep "BSD Device Name: en" | cut -d":" -f2 | cut -d" " -f2); do
+    system_ip=`ipconfig getifaddr $line`
+    if [ -n "$system_ip" ]; then
+        break
+    fi
+done
+
 echo  "<?xml version="\"1.0\"" encoding="\"UTF-8\""?>" > $xml_file
 echo  "<system>" >> $xml_file
 echo  " <sys>" >> $xml_file
@@ -168,6 +175,7 @@ echo  "     <uuid>$system_uuid</uuid>" >> $xml_file
 echo  "     <hostname>$system_hostname</hostname>" >> $xml_file
 echo  "     <domain>$system_domain</domain>" >> $xml_file
 echo  "     <description></description>" >> $xml_file
+echo  "     <ip>$system_ip</ip>" >> $xml_file
 echo  "     <class></class>" >> $xml_file
 echo  "     <type>computer</type>" >> $xml_file
 echo  "     <os_group>Apple</os_group>" >> $xml_file
@@ -210,7 +218,7 @@ for line in $(system_profiler SPNetworkDataType | grep "BSD Device Name: en" | c
     net_connection_id="$line"
     net_speed=""
     net_adapter_type="$j"
-    connection_status=`ifconfig $line | grep status | cut -d: -f2 | sed 's/^ *//g'`
+    connection_status=`ifconfig $line 2>/dev/null | grep status | cut -d: -f2 | sed 's/^ *//g'`
     if [[ "$net_mac_address" > "" ]]; then
         echo "      <item>" >> $xml_file
         echo "          <net_index>$net_index</net_index>" >> $xml_file
@@ -250,10 +258,10 @@ for line in $(system_profiler SPNetworkDataType | grep "BSD Device Name: en" | c
         fi
         # IPv6
         ip_address_v4=""
-        ip_address_v6=`ifconfig $line | grep inet6 | cut -d% -f1 | cut -d" " -f2`
+        ip_address_v6=`ifconfig $line 2>/dev/null | grep inet6 | cut -d% -f1 | cut -d" " -f2`
         if [[ "$ip_address_v6" == *":"* ]]; then
             net_index="$line"
-            ip_subnet=`ifconfig $line | grep inet6 | cut -d% -f2 | cut -d" " -f3`
+            ip_subnet=`ifconfig $line 2>/dev/null | grep inet6 | cut -d% -f2 | cut -d" " -f3`
             ip_address_v4="$ip_address_v6"
             version="6"
         fi
@@ -282,6 +290,20 @@ processor_description=`sysctl -n machdep.cpu.brand_string`
 processor_speed=`system_profiler SPHardwareDataType | grep "Processor Speed:" | cut -d":" -f2 | sed 's/^ *//g' | cut -d" " -f1 | sed 's/,/./g'`
 if [ -n "$processor_speed" ]; then
     processor_speed=`echo "scale = 0; $processor_speed*1000" | bc`
+fi
+if [ -z "$processor_speed" ]; then
+    if [ "$processor_description" = "Apple M1" ]; then
+        processor_speed="3200"
+    fi
+    if [ "$processor_description" = "Apple M2" ] || [ "$processor_description" = "Apple M2 Pro" ]; then
+        processor_speed="3500"
+    fi
+    if [ "$processor_description" = "Apple M2 Max" ] || [ "$processor_description" = "Apple M2 Ultra" ]; then
+        processor_speed="3700"
+    fi
+    if [ "$processor_description" = "Apple M3" ]; then
+        processor_speed="4050"
+    fi
 fi
 if [[ "$processor_description" == *"Apple"* ]]; then
     processor_manufacturer="Apple"
@@ -313,7 +335,7 @@ fi
 echo "  <memory>" >> $xml_file
 if [ "$processor_architecture" == "arm64" ]; then
     memory_type=$(system_profiler SPMemoryDataType | grep Type | cut -d: -f2 | sed 's/^ *//g')
-    memory_capacity=$system_pc_memory
+    memory_capacity=$(expr "$system_pc_memory" / 1024)
 
     echo "      <item>" >> $xml_file
     echo "          <bank>1</bank>" >> $xml_file
@@ -632,15 +654,17 @@ for line in $(system_profiler SPApplicationsDataType | grep "Location: " -B 8 -A
     # fi
 
     if [[ "$line" == *"Location:"* ]]; then
-        software_location=`echo "$line" | cut -d":" -f2 | sed 's/^ *//'`
-        software_name=`echo $software_name | cut -d":" -f1`
-        echo "      <item>" >> $xml_file
-        echo "          <name><![CDATA[$software_name]]></name>" >> $xml_file
-        echo "          <version><![CDATA[$software_version]]></version>" >> $xml_file
-        echo "          <location><![CDATA[$software_location]]></location>" >> $xml_file
-        echo "          <install_source>$software_install_source</install_source>" >> $xml_file
-        echo "          <publisher><![CDATA[$software_publisher]]></publisher>" >> $xml_file
-        echo "      </item>" >> $xml_file
+        if [[ "$line" != *"Daemon Containers"* ]]; then
+            software_location=`echo "$line" | cut -d":" -f2 | sed 's/^ *//'`
+            software_name=`echo $software_name | cut -d":" -f1`
+            echo "      <item>" >> $xml_file
+            echo "          <name><![CDATA[$software_name]]></name>" >> $xml_file
+            echo "          <version><![CDATA[$software_version]]></version>" >> $xml_file
+            echo "          <location><![CDATA[$software_location]]></location>" >> $xml_file
+            echo "          <install_source>$software_install_source</install_source>" >> $xml_file
+            echo "          <publisher><![CDATA[$software_publisher]]></publisher>" >> $xml_file
+            echo "      </item>" >> $xml_file
+        fi
         software_name=""
         software_version=""
         software_location=""

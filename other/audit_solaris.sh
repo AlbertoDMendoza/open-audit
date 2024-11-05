@@ -24,7 +24,7 @@
 
 # @package Open-AudIT
 # @author Mark Unwin <mark.unwin@firstwave.com>
-# @version   GIT: Open-AudIT_4.4.2
+# @version   GIT: Open-AudIT_5.6.0
 # @copyright Copyright (c) 2022, Firstwave
 # @license http://www.gnu.org/licenses/agpl-3.0.html aGPL v3
 
@@ -69,7 +69,7 @@ self_delete="n"
 debugging=2
 
 # Version
-version="4.4.2"
+version="5.6.0"
 
 # Display help
 help="n"
@@ -425,7 +425,7 @@ system_pc_date_os_installation=`grep "**** START ****" /var/sadm/system/logs/ins
 #' Write to the audit file       '
 #'''''''''''''''''''''''''''''''''
 
-echo "data=<?xml version="\"1.0\"" encoding="\"UTF-8\""?>" > $xml_file
+echo "<?xml version="\"1.0\"" encoding="\"UTF-8\""?>" > $xml_file
 echo "<system>" >> $xml_file
 echo "    <sys>" >> $xml_file
 echo "          <script_version>$version</script_version>" >> $xml_file
@@ -1043,14 +1043,11 @@ echo "</system>" >> $xml_file
 
 if [ "$submit_online" = "y" ]; then
         echo "Submitting results to server"
-        wget --no-check-certificate --post-file="$xml_file" $url 2>/dev/null
+        curl -k --data-urlencode data@"$xml_file" $url
+        # wget --no-check-certificate --post-file="$xml_file" $url 2>/dev/null
 fi
 
-# TODO - the below are from audit_linux.sh and format the XML file for us.
-#sed -i -e 's/data=//g' "$xml_file"
-#sed -i -e 's/%2B/+/g' "$xml_file"
-#sed -i -e 's/%22/"/g' "$xml_file"
-#sed -i -e 's/%26/&/g' "$xml_file"
+
 
 if [ "$create_file" != "y" ]; then
         `rm -f $PWD/$xml_file`
